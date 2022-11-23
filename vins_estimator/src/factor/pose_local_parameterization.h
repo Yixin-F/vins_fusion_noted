@@ -13,6 +13,7 @@
 #include <ceres/ceres.h>
 #include "../utility/utility.h"
 
+// 局部参数化，主要重载 旋转的加法原则、雅克比计算方式、全局位姿维度和局部位姿维度
 class PoseLocalParameterization : public ceres::LocalParameterization
 {
     virtual bool Plus(const double *x, const double *delta, double *x_plus_delta) const;

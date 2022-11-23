@@ -1034,13 +1034,13 @@ void Estimator::optimization()
     //ceres::LossFunction* loss_function = new ceres::HuberLoss(1.0); 
     for (int i = 0; i < frame_count + 1; i++)
     {
-        ceres::LocalParameterization *local_parameterization = new PoseLocalParameterization();
+        ceres::LocalParameterization *local_parameterization = new PoseLocalParameterization();   
         problem.AddParameterBlock(para_Pose[i], SIZE_POSE, local_parameterization);
         if(USE_IMU)
             problem.AddParameterBlock(para_SpeedBias[i], SIZE_SPEEDBIAS);
     }
     if(!USE_IMU)
-        // 不用IMU，这样就是六自由度不可观了，所以索性fix第一帧
+        // 不用IMU，这样就是六自由度不可观了，所以索性fix第一帧，防止零空间偏移(类似于orb2中fix第一帧)
         problem.SetParameterBlockConstant(para_Pose[0]);
 
     for (int i = 0; i < NUM_OF_CAM; i++)
@@ -1087,7 +1087,8 @@ void Estimator::optimization()
 
     int f_m_cnt = 0;
     int feature_index = -1;
-    // 遍历每个特征点
+
+    // 视觉重投影约束
     for (auto &it_per_id : f_manager.feature)
     {
         it_per_id.used_num = it_per_id.feature_per_frame.size();
