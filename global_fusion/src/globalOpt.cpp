@@ -30,7 +30,7 @@ void GlobalOptimization::GPS2XYZ(double latitude, double longitude, double altit
 {
     if(!initGPS)
     {
-        geoConverter.Reset(latitude, longitude, altitude);
+        geoConverter.Reset(latitude, longitude, altitude);  // 使用开源坐标系转换的库
         initGPS = true;
     }
     geoConverter.Forward(latitude, longitude, altitude, xyz[0], xyz[1], xyz[2]);
@@ -220,7 +220,7 @@ void GlobalOptimization::optimize()
 
             }
             //mPoseMap.unlock();
-            ceres::Solve(options, &problem, &summary);
+            ceres::Solve(options, &problem, &summary);  // ! 引用&，直接将problem中的所有参数块优化
             //std::cout << summary.BriefReport() << "\n";
 
             // update global pose

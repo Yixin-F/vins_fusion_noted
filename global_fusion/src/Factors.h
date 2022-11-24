@@ -58,7 +58,7 @@ struct RelativeRTError
 				   q_w(q_w), q_x(q_x), q_y(q_y), q_z(q_z),
 				   t_var(t_var), q_var(q_var){}
 
-	// 使用了ceres自动求导，那么只需要定义残差的计算方式
+	// 使用了ceres自动求导，那么只需要定义残差的计算方式，因为gps频率本身比较低
 	template <typename T>
 	bool operator()(const T* const w_q_i, const T* ti, const T* w_q_j, const T* tj, T* residuals) const
 	{

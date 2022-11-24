@@ -1546,6 +1546,7 @@ double Estimator::reprojectionError(Matrix3d &Ri, Vector3d &Pi, Matrix3d &rici, 
     return sqrt(rx * rx + ry * ry);
 }
 
+// 在vins-mono里没有特征筛选，光流跟踪到即可用
 void Estimator::outliersRejection(set<int> &removeIndex)
 {
     //return;

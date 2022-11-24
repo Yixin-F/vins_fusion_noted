@@ -1,5 +1,111 @@
 {
     "python.autoComplete.extraPaths": [
         "/opt/ros/melodic/lib/python2.7/dist-packages"
-    ]
+    ],
+    "todo-tree.general.tags": [
+        "?",
+        "!",
+        " Step ",
+        ">"
+        ],
+        "todo-tree.highlights.customHighlight": {
+        "?": {
+        "foreground": "red",
+        "icon": "question",
+        "iconColour": "red",
+        "type": "text-and-comment"
+        },
+        " Step ": {
+            "foreground": "#7CFC00",
+            "icon": "question",
+            "iconColour": "green",
+            "type": "text-and-comment",
+            "hideFromTree": true
+            },
+        ">": {
+            "foreground": "#fc00eb",
+            "icon": "note",
+            "iconColour": "green",
+            "type": "text-and-comment"
+            },
+        "!": {
+        "foreground": "yellow",
+        "icon": "issue-opened",
+        "iconColour": "yellow",
+        "type": "text-and-comment"
+        },
+        },
+        "todo-tree.general.revealBehaviour": "highlight todo",
+        "todo-tree.tree.showCountsInTree": true,
+        "todo-tree.filtering.excludeGlobs":[
+        "**/*.txt",
+        "**/*.md"
+        ],
+        "files.associations": {
+            "nonlinearoptimization": "cpp",
+            "*.txx": "cpp",
+            "*.ipp": "cpp",
+            "iosfwd": "cpp",
+            "thread": "cpp",
+            "cctype": "cpp",
+            "clocale": "cpp",
+            "cmath": "cpp",
+            "cstdarg": "cpp",
+            "cstddef": "cpp",
+            "cstdio": "cpp",
+            "cstdlib": "cpp",
+            "cstring": "cpp",
+            "ctime": "cpp",
+            "cwchar": "cpp",
+            "array": "cpp",
+            "atomic": "cpp",
+            "strstream": "cpp",
+            "*.tcc": "cpp",
+            "chrono": "cpp",
+            "cinttypes": "cpp",
+            "complex": "cpp",
+            "condition_variable": "cpp",
+            "cstdint": "cpp",
+            "deque": "cpp",
+            "forward_list": "cpp",
+            "list": "cpp",
+            "unordered_map": "cpp",
+            "unordered_set": "cpp",
+            "vector": "cpp",
+            "exception": "cpp",
+            "fstream": "cpp",
+            "functional": "cpp",
+            "initializer_list": "cpp",
+            "iomanip": "cpp",
+            "iostream": "cpp",
+            "istream": "cpp",
+            "limits": "cpp",
+            "mutex": "cpp",
+            "new": "cpp",
+            "ostream": "cpp",
+            "numeric": "cpp",
+            "ratio": "cpp",
+            "sstream": "cpp",
+            "stdexcept": "cpp",
+            "streambuf": "cpp",
+            "system_error": "cpp",
+            "tuple": "cpp",
+            "type_traits": "cpp",
+            "utility": "cpp",
+            "typeindex": "cpp",
+            "typeinfo": "cpp",
+            "algorithm": "cpp",
+            "iterator": "cpp",
+            "map": "cpp",
+            "memory": "cpp",
+            "memory_resource": "cpp",
+            "optional": "cpp",
+            "random": "cpp",
+            "set": "cpp",
+            "string": "cpp",
+            "string_view": "cpp",
+            "bitset": "cpp",
+            "cwctype": "cpp"
+        },
+        "todo-tree.tree.scanMode": "workspace"
 }
