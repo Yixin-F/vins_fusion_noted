@@ -67,7 +67,7 @@ cv::Mat getImageFromMsg(const sensor_msgs::ImageConstPtr &img_msg)
     return img;
 }
 
-// extract images with same timestamp from two topics
+// ! extract images with same timestamp from two topics，软同步
 void sync_process()
 {
     while(1)
@@ -78,13 +78,12 @@ void sync_process()
             std_msgs::Header header;
             double time = 0;
             m_buf.lock();
-            // 双目的话做一个简单的时间同步
+            // 双目时间同步
             if (!img0_buf.empty() && !img1_buf.empty())
             {
                 double time0 = img0_buf.front()->header.stamp.toSec();
                 double time1 = img1_buf.front()->header.stamp.toSec();
                 // 时间同步的阈值设置为3ms
-                // 0.003s sync tolerance
                 if(time0 < time1 - 0.003)
                 {
                     img0_buf.pop();
@@ -108,8 +107,7 @@ void sync_process()
             }
             m_buf.unlock();
             if(!image0.empty())
-                // 光流就直接调用inputImage这个接口来实现了
-                estimator.inputImage(time, image0, image1);
+                estimator.inputImage(time, image0, image1);  // 光流跟踪
         }
         else
         {
@@ -226,9 +224,9 @@ void cam_switch_callback(const std_msgs::BoolConstPtr &switch_msg)
 
 int main(int argc, char **argv)
 {
-    ros::init(argc, argv, "vins_estimator");
-    ros::NodeHandle n("~");
-    ros::console::set_logger_level(ROSCONSOLE_DEFAULT_NAME, ros::console::levels::Info);
+    ros::init(argc, argv, "vins_estimator");   // ros结点初始化
+    ros::NodeHandle n("~");  // 规定话题名称格式
+    ros::console::set_logger_level(ROSCONSOLE_DEFAULT_NAME, ros::console::levels::Info);  // 设置ros消息打印等级
 
     if(argc != 2)
     {
@@ -250,29 +248,25 @@ int main(int argc, char **argv)
 
     ROS_WARN("waiting for image and imu...");
 
-    registerPub(n);
+    registerPub(n);  // 发布用于可视化
 
     ros::Subscriber sub_imu;
     if(USE_IMU)
     {
-        // 只有使用IMU才会订阅IMU的topic
-        sub_imu = n.subscribe(IMU_TOPIC, 2000, imu_callback, ros::TransportHints().tcpNoDelay());
+        sub_imu = n.subscribe(IMU_TOPIC, 2000, imu_callback, ros::TransportHints().tcpNoDelay());  // 订阅IMU的topic
     }
-    // 这里保留了订阅feature tracker这个光流追踪结果类型，但是vins fusion中把他融合成了一体，也接受其他结点发布前端结果
-    ros::Subscriber sub_feature = n.subscribe("/feature_tracker/feature", 2000, feature_callback);
-    ros::Subscriber sub_img0 = n.subscribe(IMAGE0_TOPIC, 100, img0_callback);
+    ros::Subscriber sub_feature = n.subscribe("/feature_tracker/feature", 2000, feature_callback);  // 订阅前端光流
+    ros::Subscriber sub_img0 = n.subscribe(IMAGE0_TOPIC, 100, img0_callback);  // 订阅相机0
     ros::Subscriber sub_img1;
     if(STEREO)
     {
-        // 如果是双目模式才会订阅另一个相机的topic
-        sub_img1 = n.subscribe(IMAGE1_TOPIC, 100, img1_callback);
+        sub_img1 = n.subscribe(IMAGE1_TOPIC, 100, img1_callback);  // 双目模式，订阅相机1
     }
-    ros::Subscriber sub_restart = n.subscribe("/vins_restart", 100, restart_callback);
-    // 接受模式切换
-    ros::Subscriber sub_imu_switch = n.subscribe("/vins_imu_switch", 100, imu_switch_callback);
-    ros::Subscriber sub_cam_switch = n.subscribe("/vins_cam_switch", 100, cam_switch_callback);
+    ros::Subscriber sub_restart = n.subscribe("/vins_restart", 100, restart_callback);  // 订阅系统重启消息
+    ros::Subscriber sub_imu_switch = n.subscribe("/vins_imu_switch", 100, imu_switch_callback);  // 订阅imu模式转换消息
+    ros::Subscriber sub_cam_switch = n.subscribe("/vins_cam_switch", 100, cam_switch_callback);  // 订阅相机模式转换消息
 
-    std::thread sync_thread{sync_process};
+    std::thread sync_thread{sync_process};  // ! 时间戳的软同步线程
     ros::spin();
 
     return 0;

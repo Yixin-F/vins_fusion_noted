@@ -9,44 +9,44 @@
 
 #include "parameters.h"
 
-double INIT_DEPTH;
-double MIN_PARALLAX;
-double ACC_N, ACC_W;
-double GYR_N, GYR_W;
+double INIT_DEPTH;  // 地图点深度初始值
+double MIN_PARALLAX;  // 最小像素视差
+double ACC_N, ACC_W;  // 加速度计噪声、加速度计bias噪声
+double GYR_N, GYR_W;  // 陀螺仪噪声、陀螺仪bias噪声
 
-std::vector<Eigen::Matrix3d> RIC;
-std::vector<Eigen::Vector3d> TIC;
+std::vector<Eigen::Matrix3d> RIC;  // imu与相机的旋转外参
+std::vector<Eigen::Vector3d> TIC;  // imu与相机的平移外参
 
-Eigen::Vector3d G{0.0, 0.0, 9.8};
+Eigen::Vector3d G{0.0, 0.0, 9.8};  // 重力初始值
 
-double BIAS_ACC_THRESHOLD;
-double BIAS_GYR_THRESHOLD;
-double SOLVER_TIME;
-int NUM_ITERATIONS;
-int ESTIMATE_EXTRINSIC;
-int ESTIMATE_TD;
-int ROLLING_SHUTTER;
-std::string EX_CALIB_RESULT_PATH;
-std::string VINS_RESULT_PATH;
-std::string OUTPUT_FOLDER;
-std::string IMU_TOPIC;
-int ROW, COL;
-double TD;
-int NUM_OF_CAM;
-int STEREO;
-int USE_IMU;
-int MULTIPLE_THREAD;
-map<int, Eigen::Vector3d> pts_gt;
-std::string IMAGE0_TOPIC, IMAGE1_TOPIC;
-std::string FISHEYE_MASK;
-std::vector<std::string> CAM_NAMES;
-int MAX_CNT;
-int MIN_DIST;
-double F_THRESHOLD;
-int SHOW_TRACK;
-int FLOW_BACK;
+double BIAS_ACC_THRESHOLD;  // 加速度计bias阈值
+double BIAS_GYR_THRESHOLD;  // 陀螺仪bias阈值
+double SOLVER_TIME;  // ceres最大求解时间
+int NUM_ITERATIONS;  // ceres最大迭代次数
+int ESTIMATE_EXTRINSIC;  // 外参优化标志位
+int ESTIMATE_TD;  // 时延估计
+int ROLLING_SHUTTER;  // ?
+std::string EX_CALIB_RESULT_PATH;  // 旋转外参标定结果路径
+std::string VINS_RESULT_PATH;  // vins结果路径
+std::string OUTPUT_FOLDER;  // 输出路径
+std::string IMU_TOPIC;  // Imu话题名称
+int ROW, COL;  // 图片尺寸
+double TD;  // 时延
+int NUM_OF_CAM;  // 相机个数，例双目stereo设为2
+int STEREO;  // 双目使用标志位
+int USE_IMU;  // imu使用标志位
+int MULTIPLE_THREAD;  // 多线程使用标志位
+map<int, Eigen::Vector3d> pts_gt;  
+std::string IMAGE0_TOPIC, IMAGE1_TOPIC;  // 两个相机的图像话题名称
+std::string FISHEYE_MASK;  // mask名称
+std::vector<std::string> CAM_NAMES;  // 相机外参标定结果存储路径
+int MAX_CNT;  // 光流跟踪最多特征点个数
+int MIN_DIST;  // 提取新的特征点时最小间隔
+double F_THRESHOLD;  // 基于基础矩阵F的ransac特征剔除阈值
+int SHOW_TRACK;  // 跟踪显示标志位
+int FLOW_BACK;  // 是否反向光流跟踪标志位
 
-
+// ros结点读取参数
 template <typename T>
 T readParam(ros::NodeHandle &n, std::string name)
 {
@@ -63,8 +63,10 @@ T readParam(ros::NodeHandle &n, std::string name)
     return ans;
 }
 
+// 读取yaml
 void readParameters(std::string config_file)
 {
+    // 仅检查config文件是否存在
     FILE *fh = fopen(config_file.c_str(),"r");
     if(fh == NULL){
         ROS_WARN("config_file dosen't exist; wrong config_file path");
@@ -73,6 +75,7 @@ void readParameters(std::string config_file)
     }
     fclose(fh);
 
+    // 读取config文件
     cv::FileStorage fsSettings(config_file, cv::FileStorage::READ);
     if(!fsSettings.isOpened())
     {
@@ -114,7 +117,7 @@ void readParameters(std::string config_file)
     fout.close();
 
     ESTIMATE_EXTRINSIC = fsSettings["estimate_extrinsic"];
-    if (ESTIMATE_EXTRINSIC == 2)
+    if (ESTIMATE_EXTRINSIC == 2)  // 无初始值在线标定外参
     {
         ROS_WARN("have no prior about extrinsic param, calibrate extrinsic param");
         RIC.push_back(Eigen::Matrix3d::Identity());
@@ -123,14 +126,15 @@ void readParameters(std::string config_file)
     }
     else 
     {
-        if ( ESTIMATE_EXTRINSIC == 1)
+        if ( ESTIMATE_EXTRINSIC == 1)  // 有初始值在线标定外参
         {
             ROS_WARN(" Optimize extrinsic param around initial guess!");
             EX_CALIB_RESULT_PATH = OUTPUT_FOLDER + "/extrinsic_parameter.csv";
         }
-        if (ESTIMATE_EXTRINSIC == 0)
+        if (ESTIMATE_EXTRINSIC == 0)  // fix不标定外参
             ROS_WARN(" fix extrinsic param ");
 
+        // 给定相机0外参初始值
         cv::Mat cv_T;
         fsSettings["body_T_cam0"] >> cv_T;
         Eigen::Matrix4d T;
@@ -166,6 +170,7 @@ void readParameters(std::string config_file)
         //printf("%s cam1 path\n", cam1Path.c_str() );
         CAM_NAMES.push_back(cam1Path);
         
+        // 给定相机1外参初始值
         cv::Mat cv_T;
         fsSettings["body_T_cam1"] >> cv_T;
         Eigen::Matrix4d T;

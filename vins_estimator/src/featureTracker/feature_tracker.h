@@ -61,17 +61,17 @@ public:
 
     int row, col;
     cv::Mat imTrack;
-    cv::Mat mask;
+    cv::Mat mask;  // 图像mask，用于标记特征点位置
     cv::Mat fisheye_mask;
     cv::Mat prev_img, cur_img;
     vector<cv::Point2f> n_pts;
-    vector<cv::Point2f> predict_pts;
+    vector<cv::Point2f> predict_pts;  // 追踪先验预测得到的下一帧特征点
     vector<cv::Point2f> predict_pts_debug;
-    vector<cv::Point2f> prev_pts, cur_pts, cur_right_pts;
-    vector<cv::Point2f> prev_un_pts, cur_un_pts, cur_un_right_pts;
-    vector<cv::Point2f> pts_velocity, right_pts_velocity;
-    vector<int> ids, ids_right;
-    vector<int> track_cnt;
+    vector<cv::Point2f> prev_pts, cur_pts, cur_right_pts;  // 特征点
+    vector<cv::Point2f> prev_un_pts, cur_un_pts, cur_un_right_pts;  // 去畸变的特征点
+    vector<cv::Point2f> pts_velocity, right_pts_velocity;  // 特征点速度，用于时延估计
+    vector<int> ids, ids_right;  // 成功追踪特征点索引
+    vector<int> track_cnt;  // 某特征点被成功追踪的次数，越大越好
     map<int, cv::Point2f> cur_un_pts_map, prev_un_pts_map;
     map<int, cv::Point2f> cur_un_right_pts_map, prev_un_right_pts_map;
     map<int, cv::Point2f> prevLeftPtsMap;
@@ -80,5 +80,5 @@ public:
     double prev_time;
     bool stereo_cam;
     int n_id;
-    bool hasPrediction;
+    bool hasPrediction;  // 是否有追踪先验
 };

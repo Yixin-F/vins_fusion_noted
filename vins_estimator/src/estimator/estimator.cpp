@@ -97,28 +97,26 @@ void Estimator::setParameter()
     mProcess.lock();
     for (int i = 0; i < NUM_OF_CAM; i++)
     {
-        tic[i] = TIC[i];
+        tic[i] = TIC[i];  // 外参
         ric[i] = RIC[i];
         cout << " exitrinsic cam " << i << endl  << ric[i] << endl << tic[i].transpose() << endl;
     }
-    f_manager.setRic(ric);
-    ProjectionTwoFrameOneCamFactor::sqrt_info = FOCAL_LENGTH / 1.5 * Matrix2d::Identity();
+    f_manager.setRic(ric);  // ?
+    ProjectionTwoFrameOneCamFactor::sqrt_info = FOCAL_LENGTH / 1.5 * Matrix2d::Identity();  // ? 
     ProjectionTwoFrameTwoCamFactor::sqrt_info = FOCAL_LENGTH / 1.5 * Matrix2d::Identity();
     ProjectionOneFrameTwoCamFactor::sqrt_info = FOCAL_LENGTH / 1.5 * Matrix2d::Identity();
-    td = TD;
-    g = G;
+    td = TD;  // 时延
+    g = G;  // 重力
     cout << "set g " << g.transpose() << endl;
-    featureTracker.readIntrinsicParameter(CAM_NAMES);
+    featureTracker.readIntrinsicParameter(CAM_NAMES);  // 根据相机外参文件初始化相机类型
 
+    // 如果是多线程模式，就是一个线程做光流，一个线程做后端优化，否则，就是一个做完光流之后在做线程优化,串行处理
+    // 因为在vinsfusion有两种获取数据的方式，一种是euroc数据集一样使用rosbag包来获取，通常这种情况下对实时性要求比较高，另一种是kitti数据集一样读取离线数据，此时对实时性要求就比较低
     std::cout << "MULTIPLE_THREAD is " << MULTIPLE_THREAD << '\n';
-    // 如果是多线程模式，就是一个线程做光流，一个线程做后端优化
-    // 否则，就是一个做完光流之后在做线程优化,串行处理
-    // 在vinsfusion有两种获取数据的方式，一种是euroc数据集一样使用rosbag包来获取，通常这种情况下对实时性要求比较高
-    // 另一种是kitti数据集一样读取离线数据，此时对实时性要求就比较低
     if (MULTIPLE_THREAD && !initThreadFlag)
     {
         initThreadFlag = true;
-        processThread = std::thread(&Estimator::processMeasurements, this);
+        processThread = std::thread(&Estimator::processMeasurements, this);  // 后端优化另开辟线程
     }
     mProcess.unlock();
 }
@@ -161,10 +159,11 @@ void Estimator::changeSensorType(int use_imu, int use_stereo)
     }
 }
 
+// 光流跟踪
 void Estimator::inputImage(double t, const cv::Mat &_img, const cv::Mat &_img1)
 {
-    inputImageCnt++;
-    map<int, vector<pair<int, Eigen::Matrix<double, 7, 1>>>> featureFrame;
+    inputImageCnt++;  // 跟踪图片计数
+    map<int, vector<pair<int, Eigen::Matrix<double, 7, 1>>>> featureFrame;  // 存储特征
     TicToc featureTrackerTime;
 
     if(_img1.empty())

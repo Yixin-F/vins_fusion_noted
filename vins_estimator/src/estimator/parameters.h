@@ -20,8 +20,8 @@
 
 using namespace std;
 
-const double FOCAL_LENGTH = 460.0;
-const int WINDOW_SIZE = 10;
+const double FOCAL_LENGTH = 460.0;  // 焦距
+const int WINDOW_SIZE = 10;  // 滑窗内kf个数
 const int NUM_OF_F = 1000;
 //#define UNIT_SPHERE_ERROR
 

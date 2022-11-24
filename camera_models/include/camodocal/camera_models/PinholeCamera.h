@@ -133,10 +133,10 @@ public:
     std::string parametersToString(void) const;
 
 private:
-    Parameters mParameters;
+    Parameters mParameters;  // 相机参数
 
     double m_inv_K11, m_inv_K13, m_inv_K22, m_inv_K23;
-    bool m_noDistortion;
+    bool m_noDistortion;  // 去畸变标志
 };
 
 typedef boost::shared_ptr<PinholeCamera> PinholeCameraPtr;

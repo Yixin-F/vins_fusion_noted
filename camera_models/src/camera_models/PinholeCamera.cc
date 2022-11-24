@@ -441,7 +441,7 @@ PinholeCamera::liftSphere(const Eigen::Vector2d& p, Eigen::Vector3d& P) const
 }
 
 /**
- * \brief Lifts a point from the image plane to its projective ray
+ * \brief Lifts a point from the image plane to its projective ray，去畸变
  *
  * \param p image coordinates
  * \param P coordinates of the projective ray
@@ -454,6 +454,7 @@ PinholeCamera::liftProjective(const Eigen::Vector2d& p, Eigen::Vector3d& P) cons
     //double lambda;
 
     // Lift points to normalised plane
+    // 根据相机内参，把像素坐标投影到相机坐标系下(《十四讲》公式)，但仍存在畸变
     mx_d = m_inv_K11 * p(0) + m_inv_K13;
     my_d = m_inv_K22 * p(1) + m_inv_K23;
 
@@ -464,7 +465,7 @@ PinholeCamera::liftProjective(const Eigen::Vector2d& p, Eigen::Vector3d& P) cons
     }
     else
     {
-        if (0)
+        if (0)  // 0
         {
             double k1 = mParameters.k1();
             double k2 = mParameters.k2();

@@ -92,7 +92,7 @@ class Estimator
         MARGIN_SECOND_NEW = 1
     };
 
-    std::mutex mProcess;
+    std::mutex mProcess;   // 后端优化线程锁，用于clearState()、setParameter()、changeSensorType()、主线程processMeasurements()
     std::mutex mBuf;
     std::mutex mPropagate;
     queue<pair<double, Eigen::Vector3d>> accBuf;
@@ -101,24 +101,24 @@ class Estimator
     double prevTime, curTime;
     bool openExEstimation;
 
-    std::thread trackThread;
-    std::thread processThread;
+    std::thread trackThread;  // 光流跟踪线程
+    std::thread processThread;  // 后端优化线程
 
-    FeatureTracker featureTracker;
+    FeatureTracker featureTracker;  // 光流跟踪
 
-    SolverFlag solver_flag;
-    MarginalizationFlag  marginalization_flag;
-    Vector3d g;
+    SolverFlag solver_flag;  // ceres非线性求解方式
+    MarginalizationFlag  marginalization_flag;  // 边缘化类型标志位
+    Vector3d g;  // 重力
 
-    Matrix3d ric[2];
-    Vector3d tic[2];
+    Matrix3d ric[2];  // 旋转外参
+    Vector3d tic[2];  // 平移外参
 
     Vector3d        Ps[(WINDOW_SIZE + 1)];
     Vector3d        Vs[(WINDOW_SIZE + 1)];
     Matrix3d        Rs[(WINDOW_SIZE + 1)];
     Vector3d        Bas[(WINDOW_SIZE + 1)];
     Vector3d        Bgs[(WINDOW_SIZE + 1)];
-    double td;
+    double td;  // 时延
 
     Matrix3d back_R0, last_R, last_R0;
     Vector3d back_P0, last_P, last_P0;
