@@ -60,7 +60,7 @@ public:
     bool inBorder(const cv::Point2f &pt);
 
     int row, col;
-    cv::Mat imTrack;
+    cv::Mat imTrack; // 左右目合并为同一图像
     cv::Mat mask;  // 图像mask，用于标记特征点位置
     cv::Mat fisheye_mask;
     cv::Mat prev_img, cur_img;
@@ -72,9 +72,9 @@ public:
     vector<cv::Point2f> pts_velocity, right_pts_velocity;  // 特征点速度，用于时延估计
     vector<int> ids, ids_right;  // 成功追踪特征点索引
     vector<int> track_cnt;  // 某特征点被成功追踪的次数，越大越好
-    map<int, cv::Point2f> cur_un_pts_map, prev_un_pts_map;
-    map<int, cv::Point2f> cur_un_right_pts_map, prev_un_right_pts_map;
-    map<int, cv::Point2f> prevLeftPtsMap;
+    map<int, cv::Point2f> cur_un_pts_map, prev_un_pts_map;   // 存储的是左目去畸变点的索引和坐标，map格式
+    map<int, cv::Point2f> cur_un_right_pts_map, prev_un_right_pts_map;  // 存储的是右目去畸变点的索引和坐标，map格式
+    map<int, cv::Point2f> prevLeftPtsMap;  // 存储的是在右目向左目反向追踪筛选后的 左目剩余的特征，其实这个反向追踪进行了但是反向筛选没有进行(代码中注释)，其实等同于cur_un_pts_map
     vector<camodocal::CameraPtr> m_camera;
     double cur_time;
     double prev_time;

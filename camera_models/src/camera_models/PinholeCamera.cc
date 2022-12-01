@@ -467,7 +467,7 @@ PinholeCamera::liftProjective(const Eigen::Vector2d& p, Eigen::Vector3d& P) cons
     {
         if (0)  // 0
         {
-            double k1 = mParameters.k1();
+            double k1 = mParameters.k1();   // 去畸变参数
             double k2 = mParameters.k2();
             double p1 = mParameters.p1();
             double p2 = mParameters.p2();
@@ -490,11 +490,11 @@ PinholeCamera::liftProjective(const Eigen::Vector2d& p, Eigen::Vector3d& P) cons
         else
         {
             // Recursive distortion model
-            int n = 8;
+            int n = 8;  // ! 递归去畸变，因为去畸变模型是高度非线性的
             Eigen::Vector2d d_u;
             distortion(Eigen::Vector2d(mx_d, my_d), d_u);
             // Approximate value
-            mx_u = mx_d - d_u(0);
+            mx_u = mx_d - d_u(0);  // 初值
             my_u = my_d - d_u(1);
 
             for (int i = 1; i < n; ++i)

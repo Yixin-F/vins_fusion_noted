@@ -159,25 +159,35 @@ void Estimator::changeSensorType(int use_imu, int use_stereo)
     }
 }
 
-// 光流跟踪
+/**
+ * @brief   光流跟踪
+ * 
+ * @param t  当前时间
+ * @param _img   左目
+ * @param _img1  右目
+ * @return * void 
+ */
 void Estimator::inputImage(double t, const cv::Mat &_img, const cv::Mat &_img1)
 {
     inputImageCnt++;  // 跟踪图片计数
-    map<int, vector<pair<int, Eigen::Matrix<double, 7, 1>>>> featureFrame;  // 存储特征
+    map<int, vector<pair<int, Eigen::Matrix<double, 7, 1>>>> featureFrame;  // 存储左右目特征追踪结果
     TicToc featureTrackerTime;
 
+    // Step 1: 光流跟踪结果
     if(_img1.empty())
         featureFrame = featureTracker.trackImage(t, _img);
     else
         featureFrame = featureTracker.trackImage(t, _img, _img1);
     //printf("featureTracker time: %f\n", featureTrackerTime.toc());
 
+    // Step 2: 发布左右目之间跟踪的图像
     if (SHOW_TRACK)
     {
         cv::Mat imgTrack = featureTracker.getTrackImage();
         pubTrackImage(imgTrack, t);
     }
-    // 如果是多线程模式就做一下降采样
+
+    // Step 3: 多线程模式下把光流跟踪结果下采样，担心processMeasurements()处理不过来
     if(MULTIPLE_THREAD)  
     {     
         if(inputImageCnt % 2 == 0)
@@ -193,7 +203,7 @@ void Estimator::inputImage(double t, const cv::Mat &_img, const cv::Mat &_img1)
         featureBuf.push(make_pair(t, featureFrame));
         mBuf.unlock();
         TicToc processTime;
-        processMeasurements();
+        processMeasurements();  // ! 单线程下，串行开启processMeasurements()
         printf("process time: %f\n", processTime.toc());
     }
     
@@ -217,6 +227,7 @@ void Estimator::inputIMU(double t, const Vector3d &linearAcceleration, const Vec
     }
 }
 
+// 存储特征信息
 void Estimator::inputFeature(double t, const map<int, vector<pair<int, Eigen::Matrix<double, 7, 1>>>> &featureFrame)
 {
     mBuf.lock();
@@ -227,7 +238,7 @@ void Estimator::inputFeature(double t, const map<int, vector<pair<int, Eigen::Ma
         processMeasurements();
 }
 
-
+// 得到两帧之间的imu数据
 bool Estimator::getIMUInterval(double t0, double t1, vector<pair<double, Eigen::Vector3d>> &accVector, 
                                 vector<pair<double, Eigen::Vector3d>> &gyrVector)
 {
@@ -263,36 +274,39 @@ bool Estimator::getIMUInterval(double t0, double t1, vector<pair<double, Eigen::
     return true;
 }
 
+// imu最新数据时间大于最老的特征时间，说明此时imu数据恰好将该帧特征覆盖
 bool Estimator::IMUAvailable(double t)
 {
-    if(!accBuf.empty() && t <= accBuf.back().first)
+    if(!accBuf.empty() && t <= accBuf.back().first)  
         return true;
     else
         return false;
 }
 
+// ! 主线程2 负责初始化、恢复位姿、滑窗优化、边缘化等
 void Estimator::processMeasurements()
 {
     while (1)
     {
+        // Step 1: 得到imu与图像软同步，得到两图像帧之间的imu数据
         //printf("process measurments\n");
-        pair<double, map<int, vector<pair<int, Eigen::Matrix<double, 7, 1> > > > > feature;
-        vector<pair<double, Eigen::Vector3d>> accVector, gyrVector;
+        pair<double, map<int, vector<pair<int, Eigen::Matrix<double, 7, 1> > > > > feature;  // pair<时间, featureFrame>
+        vector<pair<double, Eigen::Vector3d>> accVector, gyrVector;   // 存储某两图像帧之间的imu数据
         if(!featureBuf.empty())
         {
             // 取出一组光流追踪的结果
             feature = featureBuf.front();
-            curTime = feature.first + td;
+            curTime = feature.first + td;   // ! td 是关于得到传感器感知到生成特征之间的时间差，也就是说光流跟踪得到特征的时刻已经不再是传感器接收到图像的瞬间了，光流跟踪需要时间
             while(1)
             {
-                // 等待IMU数据来全，当然没有IMU就算了
+                // 等待IMU数据
                 if ((!USE_IMU  || IMUAvailable(feature.first + td)))
                     break;
                 else
                 {
                     printf("wait for imu ... \n");
                     if (! MULTIPLE_THREAD)
-                        return;
+                        return;  // 不多线程的话，就没必要等待了，不可能有新的imu来的
                     std::chrono::milliseconds dura(5);
                     std::this_thread::sleep_for(dura);
                 }
@@ -310,6 +324,7 @@ void Estimator::processMeasurements()
                 if(!initFirstPoseFlag)
                     // 如果是第一帧，就根据IMU重力的方向估计出大概的姿态，其中yaw置零就可以了
                     initFirstIMUPose(accVector);
+                // 
                 for(size_t i = 0; i < accVector.size(); i++)
                 {
                     double dt;
@@ -319,7 +334,7 @@ void Estimator::processMeasurements()
                         dt = curTime - accVector[i - 1].first;
                     else
                         dt = accVector[i].first - accVector[i - 1].first;
-                    // 预积分处理
+                    // ! 预积分处理
                     processIMU(accVector[i].first, dt, accVector[i].second, gyrVector[i].second);
                 }
             }
@@ -350,13 +365,13 @@ void Estimator::processMeasurements()
     }
 }
 
-
+// 通过第一帧和第二帧之间的imu数据，根据IMU重力的方向估计出第一帧图像的大概姿态，就是简单地将yaw置零
 void Estimator::initFirstIMUPose(vector<pair<double, Eigen::Vector3d>> &accVector)
 {
     printf("init first imu pose\n");
     initFirstPoseFlag = true;
     //return;
-    Eigen::Vector3d averAcc(0, 0, 0);
+    Eigen::Vector3d averAcc(0, 0, 0);  // ? 平均加速度，这里几乎就是重力加速度？难道一开始需要静止
     int n = (int)accVector.size();
     for(size_t i = 0; i < accVector.size(); i++)
     {
@@ -364,10 +379,10 @@ void Estimator::initFirstIMUPose(vector<pair<double, Eigen::Vector3d>> &accVecto
     }
     averAcc = averAcc / n;
     printf("averge acc %f %f %f\n", averAcc.x(), averAcc.y(), averAcc.z());
-    Matrix3d R0 = Utility::g2R(averAcc);
-    double yaw = Utility::R2ypr(R0).x();
+    Matrix3d R0 = Utility::g2R(averAcc);   // R0里的yaw是人为置零的
+    double yaw = Utility::R2ypr(R0).x();   // ? 又重复置零一遍？？
     R0 = Utility::ypr2R(Eigen::Vector3d{-yaw, 0, 0}) * R0;
-    Rs[0] = R0;
+    Rs[0] = R0;   // 给定为第一帧图像的位姿
     cout << "init R0 " << endl << Rs[0] << endl;
     //Vs[0] = Vector3d(5, 0, 0);
 }
@@ -380,7 +395,7 @@ void Estimator::initFirstPose(Eigen::Vector3d p, Eigen::Matrix3d r)
     initR = r;
 }
 
-
+// imu预积分
 void Estimator::processIMU(double t, double dt, const Vector3d &linear_acceleration, const Vector3d &angular_velocity)
 {
     if (!first_imu)
@@ -392,19 +407,19 @@ void Estimator::processIMU(double t, double dt, const Vector3d &linear_accelerat
 
     if (!pre_integrations[frame_count])
     {
-        pre_integrations[frame_count] = new IntegrationBase{acc_0, gyr_0, Bas[frame_count], Bgs[frame_count]};
+        pre_integrations[frame_count] = new IntegrationBase{acc_0, gyr_0, Bas[frame_count], Bgs[frame_count]};  // 初始化预积分头
     }
-    if (frame_count != 0)
+    if (frame_count != 0)   // ! 第一帧图像没有使用，也就是说不imu积分第一帧图像的位姿
     {
-        pre_integrations[frame_count]->push_back(dt, linear_acceleration, angular_velocity);
+        pre_integrations[frame_count]->push_back(dt, linear_acceleration, angular_velocity);   // ! 关于KF之间的imu预积分，一段一段的预积分
         //if(solver_flag != NON_LINEAR)
-            tmp_pre_integration->push_back(dt, linear_acceleration, angular_velocity);
+            tmp_pre_integration->push_back(dt, linear_acceleration, angular_velocity);  // ! 整个系统运行时始终在预积分，全部的预积分
 
-        dt_buf[frame_count].push_back(dt);
+        dt_buf[frame_count].push_back(dt);   // 关于kf备份imu数据
         linear_acceleration_buf[frame_count].push_back(linear_acceleration);
         angular_velocity_buf[frame_count].push_back(angular_velocity);
 
-        int j = frame_count;         
+        int j = frame_count;    // ! 递归式的中值积分        
         Vector3d un_acc_0 = Rs[j] * (acc_0 - Bas[j]) - g;
         Vector3d un_gyr = 0.5 * (gyr_0 + angular_velocity) - Bgs[j];
         Rs[j] *= Utility::deltaQ(un_gyr * dt).toRotationMatrix();
@@ -1611,10 +1626,13 @@ void Estimator::outliersRejection(set<int> &removeIndex)
     }
 }
 
+// 中值积分快速发布最近Imu位姿
 void Estimator::fastPredictIMU(double t, Eigen::Vector3d linear_acceleration, Eigen::Vector3d angular_velocity)
 {
     double dt = t - latest_time;
     latest_time = t;
+
+    // 中值积分
     Eigen::Vector3d un_acc_0 = latest_Q * (latest_acc_0 - latest_Ba) - g;
     Eigen::Vector3d un_gyr = 0.5 * (latest_gyr_0 + angular_velocity) - latest_Bg;
     latest_Q = latest_Q * Utility::deltaQ(un_gyr * dt);

@@ -93,7 +93,7 @@ class Estimator
     };
 
     std::mutex mProcess;   // 后端优化线程锁，用于clearState()、setParameter()、changeSensorType()、主线程processMeasurements()
-    std::mutex mBuf;
+    std::mutex mBuf;   // imu与特征存储和使用的线程锁，不用担心浪费
     std::mutex mPropagate;
     queue<pair<double, Eigen::Vector3d>> accBuf;
     queue<pair<double, Eigen::Vector3d>> gyrBuf;
@@ -124,7 +124,7 @@ class Estimator
     Vector3d back_P0, last_P, last_P0;
     double Headers[(WINDOW_SIZE + 1)];
 
-    IntegrationBase *pre_integrations[(WINDOW_SIZE + 1)];
+    IntegrationBase *pre_integrations[(WINDOW_SIZE + 1)];   // 只针对关键帧之间的imu进行预积分
     Vector3d acc_0, gyr_0;
 
     vector<double> dt_buf[(WINDOW_SIZE + 1)];
@@ -139,7 +139,7 @@ class Estimator
     MotionEstimator m_estimator;
     InitialEXRotation initial_ex_rotation;
 
-    bool first_imu;
+    bool first_imu;  // 第一帧imu标志
     bool is_valid, is_key;
     bool failure_occur;
 
@@ -163,7 +163,7 @@ class Estimator
     vector<double *> last_marginalization_parameter_blocks;
 
     map<double, ImageFrame> all_image_frame;
-    IntegrationBase *tmp_pre_integration;
+    IntegrationBase *tmp_pre_integration;   // 这个预积分头始终在imu预积分
 
     Eigen::Vector3d initP;
     Eigen::Matrix3d initR;
@@ -172,6 +172,6 @@ class Estimator
     Eigen::Vector3d latest_P, latest_V, latest_Ba, latest_Bg, latest_acc_0, latest_gyr_0;
     Eigen::Quaterniond latest_Q;
 
-    bool initFirstPoseFlag;
+    bool initFirstPoseFlag;   // 初始化标志
     bool initThreadFlag;
 };

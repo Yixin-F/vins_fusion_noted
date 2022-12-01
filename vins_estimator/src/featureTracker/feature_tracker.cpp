@@ -97,7 +97,14 @@ double FeatureTracker::distance(cv::Point2f &pt1, cv::Point2f &pt2)
     return sqrt(dx * dx + dy * dy);
 }
 
-// 光流追踪，支持单目和双目模式
+/**
+ * @brief  光流追踪，支持单目和双目模式
+ * 
+ * @param _cur_time 当前帧时刻
+ * @param _img   左目
+ * @param _img1   右目
+ * @return map<int, vector<pair<int, Eigen::Matrix<double, 7, 1>>>>    追踪特征集合  map<特征id, vector<pair<0是左目，1是右目, 去畸变归一化坐标3 + 原始坐标2 + 速度2>>> 
+ */
 map<int, vector<pair<int, Eigen::Matrix<double, 7, 1>>>> FeatureTracker::trackImage(double _cur_time, const cv::Mat &_img, const cv::Mat &_img1)
 {
     TicToc t_r;
@@ -225,26 +232,28 @@ map<int, vector<pair<int, Eigen::Matrix<double, 7, 1>>>> FeatureTracker::trackIm
     // Step 4：计算特征点速度，用于以后时延估计
     pts_velocity = ptsVelocity(ids, cur_un_pts, cur_un_pts_map, prev_un_pts_map);
 
-    // 针对双目进行处理
+    // > 双目模式
     if(!_img1.empty() && stereo_cam)
     {
-        // 一些状态位的清零工作
+        // 清空一些vector
         ids_right.clear();
         cur_right_pts.clear();
         cur_un_right_pts.clear();
         right_pts_velocity.clear();
         cur_un_right_pts_map.clear();
+
+        // Step 1: 左目向右目追踪
         if(!cur_pts.empty())
         {
             //printf("stereo image; track feature on right image\n");
             vector<cv::Point2f> reverseLeftPts;
             vector<uchar> status, statusRightLeft;
             vector<float> err;
-            // cur left ---- cur right
-            // 左目相机去和右目相机做光流追踪
+
+            // ! cur left to cur right
             cv::calcOpticalFlowPyrLK(cur_img, rightImg, cur_pts, cur_right_pts, status, err, cv::Size(21, 21), 3);
-            // reverse check cur right ---- cur left
-            // 同样可以做双向光流的double check
+
+            // ! reverse: check cur right to cur left
             if(FLOW_BACK)
             {
                 cv::calcOpticalFlowPyrLK(rightImg, cur_img, cur_right_pts, reverseLeftPts, statusRightLeft, err, cv::Size(21, 21), 3);
@@ -257,11 +266,11 @@ map<int, vector<pair<int, Eigen::Matrix<double, 7, 1>>>> FeatureTracker::trackIm
                 }
             }
 
-            ids_right = ids;
-            // 一些瘦身操作
+            ids_right = ids;   // 右目索引与左目索引一致
             reduceVector(cur_right_pts, status);
             reduceVector(ids_right, status);
-            // 如果左目的特征点右目没有，也没关系，不会影响左目已经提出来的特征点
+
+            // ! 如果左目的特征点右目没有，也没关系，不会影响左目已经提出来的特征点
             // only keep left-right pts
             /*
             reduceVector(cur_pts, status);
@@ -270,16 +279,19 @@ map<int, vector<pair<int, Eigen::Matrix<double, 7, 1>>>> FeatureTracker::trackIm
             reduceVector(cur_un_pts, status);
             reduceVector(pts_velocity, status);
             */
-            // 右目去畸变以及计算速度
+
+            // 右目去畸变以及计算特征速度
             cur_un_right_pts = undistortedPts(cur_right_pts, m_camera[1]);
             right_pts_velocity = ptsVelocity(ids_right, cur_un_right_pts, cur_un_right_pts_map, prev_un_right_pts_map);
         }
         prev_un_right_pts_map = cur_un_right_pts_map;
     }
+
+    // Step 2: 显示左目到右目的追踪
     if(SHOW_TRACK)
         drawTrack(cur_img, rightImg, ids, cur_pts, cur_right_pts, prevLeftPtsMap);
 
-    // 当前的状态量转换成上一帧的状态量
+    // > 当前的状态量转换成上一帧的状态量
     prev_img = cur_img;
     prev_pts = cur_pts;
     prev_un_pts = cur_un_pts;
@@ -287,10 +299,11 @@ map<int, vector<pair<int, Eigen::Matrix<double, 7, 1>>>> FeatureTracker::trackIm
     prev_time = cur_time;
     hasPrediction = false;
 
-    prevLeftPtsMap.clear();
+    prevLeftPtsMap.clear();  // 直接变成上一帧状态
     for(size_t i = 0; i < cur_pts.size(); i++)
         prevLeftPtsMap[ids[i]] = cur_pts[i];
-    // 对结果进行总结
+
+    // > 整理追踪结果
     // idx -> （cam id - 性质）
     map<int, vector<pair<int, Eigen::Matrix<double, 7, 1>>>> featureFrame;
     for (size_t i = 0; i < ids.size(); i++)
@@ -303,14 +316,14 @@ map<int, vector<pair<int, Eigen::Matrix<double, 7, 1>>>> FeatureTracker::trackIm
         double p_u, p_v;
         p_u = cur_pts[i].x;
         p_v = cur_pts[i].y;
-        // 左目的camera id = 0
+        // ! 左目的camera id = 0
         int camera_id = 0;
         double velocity_x, velocity_y;
         velocity_x = pts_velocity[i].x;
         velocity_y = pts_velocity[i].y;
 
         Eigen::Matrix<double, 7, 1> xyz_uv_velocity;
-        xyz_uv_velocity << x, y, z, p_u, p_v, velocity_x, velocity_y;
+        xyz_uv_velocity << x, y, z, p_u, p_v, velocity_x, velocity_y;  // 7维，存储去畸变归一化坐标、原始坐标、速度
         featureFrame[feature_id].emplace_back(camera_id,  xyz_uv_velocity);
     }
 
@@ -326,7 +339,7 @@ map<int, vector<pair<int, Eigen::Matrix<double, 7, 1>>>> FeatureTracker::trackIm
             double p_u, p_v;
             p_u = cur_right_pts[i].x;
             p_v = cur_right_pts[i].y;
-            // 右目的camera id = 1
+            // ! 右目的camera id = 1
             int camera_id = 1;
             double velocity_x, velocity_y;
             velocity_x = right_pts_velocity[i].x;
@@ -334,8 +347,7 @@ map<int, vector<pair<int, Eigen::Matrix<double, 7, 1>>>> FeatureTracker::trackIm
 
             Eigen::Matrix<double, 7, 1> xyz_uv_velocity;
             xyz_uv_velocity << x, y, z, p_u, p_v, velocity_x, velocity_y;
-            // 只有右目也有对应特征点的才会emplace back
-            featureFrame[feature_id].emplace_back(camera_id,  xyz_uv_velocity);
+            featureFrame[feature_id].emplace_back(camera_id,  xyz_uv_velocity);  // 因为没有通过右目向左目的反向追踪 去筛选左目特征，所以featureFrame中有的元素中只有左目特征camera_id 0
         }
     }
 
@@ -426,7 +438,13 @@ void FeatureTracker::showUndistortion(const string &name)
     // cv::waitKey(0);
 }
 
-// 去畸变到归一化相机平面
+/**
+ * @brief   将特征点坐标去畸变并归一化到相机平面
+ * 
+ * @param pts  未去畸变特征点坐标
+ * @param cam  相机类型
+ * @return vector<cv::Point2f>   // 去畸变特征点坐标
+ */
 vector<cv::Point2f> FeatureTracker::undistortedPts(vector<cv::Point2f> &pts, camodocal::CameraPtr cam)
 {
     vector<cv::Point2f> un_pts;
@@ -435,11 +453,20 @@ vector<cv::Point2f> FeatureTracker::undistortedPts(vector<cv::Point2f> &pts, cam
         Eigen::Vector2d a(pts[i].x, pts[i].y);
         Eigen::Vector3d b;
         cam->liftProjective(a, b);  // ! 根据相机cam类型去畸变，参考PinholeCamera
-        un_pts.push_back(cv::Point2f(b.x() / b.z(), b.y() / b.z()));
+        un_pts.push_back(cv::Point2f(b.x() / b.z(), b.y() / b.z()));   // 归一化
     }
     return un_pts;
 }
 
+/**
+ * @brief 接收当前去畸变的点和索引，组成map格式，计算特征点速度，一是用于后面延时估计，二是用于假设恒速为下一帧特征追踪提供先验
+ * 
+ * @param ids  当前时刻去畸变点索引
+ * @param pts  当前时刻去畸变点坐标
+ * @param cur_id_pts   当前时刻特征map格式
+ * @param prev_id_pts   上一时刻特征map格式
+ * @return vector<cv::Point2f>   特征速度
+ */
 vector<cv::Point2f> FeatureTracker::ptsVelocity(vector<int> &ids, vector<cv::Point2f> &pts, 
                                             map<int, cv::Point2f> &cur_id_pts, map<int, cv::Point2f> &prev_id_pts)
 {
@@ -447,7 +474,7 @@ vector<cv::Point2f> FeatureTracker::ptsVelocity(vector<int> &ids, vector<cv::Poi
     cur_id_pts.clear();
     for (unsigned int i = 0; i < ids.size(); i++)
     {
-        cur_id_pts.insert(make_pair(ids[i], pts[i]));
+        cur_id_pts.insert(make_pair(ids[i], pts[i]));   // 存储的点是
     }
 
     // caculate points velocity
@@ -480,6 +507,16 @@ vector<cv::Point2f> FeatureTracker::ptsVelocity(vector<int> &ids, vector<cv::Poi
     return pts_velocity;
 }
 
+/**
+ * @brief   合并左右目图像，左目到右目的追踪连线显示
+ * 
+ * @param imLeft  左目
+ * @param imRight   右目
+ * @param curLeftIds  左目特征索引
+ * @param curLeftPts   左目特征坐标
+ * @param curRightPts   右目特征坐标
+ * @param prevLeftPtsMap   存储当前时刻左目与右目同时追踪到的特征
+ */
 void FeatureTracker::drawTrack(const cv::Mat &imLeft, const cv::Mat &imRight, 
                                vector<int> &curLeftIds,
                                vector<cv::Point2f> &curLeftPts, 
@@ -489,9 +526,9 @@ void FeatureTracker::drawTrack(const cv::Mat &imLeft, const cv::Mat &imRight,
     //int rows = imLeft.rows;
     int cols = imLeft.cols;
     if (!imRight.empty() && stereo_cam)
-        cv::hconcat(imLeft, imRight, imTrack);
+        cv::hconcat(imLeft, imRight, imTrack);  // 左右目图像合并
     else
-        imTrack = imLeft.clone();
+        imTrack = imLeft.clone();  // 必须.clone()，否则浅拷贝
     cv::cvtColor(imTrack, imTrack, CV_GRAY2RGB);
 
     for (size_t j = 0; j < curLeftPts.size(); j++)
@@ -504,7 +541,7 @@ void FeatureTracker::drawTrack(const cv::Mat &imLeft, const cv::Mat &imRight,
         for (size_t i = 0; i < curRightPts.size(); i++)
         {
             cv::Point2f rightPt = curRightPts[i];
-            rightPt.x += cols;
+            rightPt.x += cols;   // 需要在合并图像上平移
             cv::circle(imTrack, rightPt, 2, cv::Scalar(0, 255, 0), 2);
             //cv::Point2f leftPt = curLeftPtsTrackRight[i];
             //cv::line(imTrack, leftPt, rightPt, cv::Scalar(0, 255, 0), 1, 8, 0);
@@ -518,7 +555,7 @@ void FeatureTracker::drawTrack(const cv::Mat &imLeft, const cv::Mat &imRight,
         mapIt = prevLeftPtsMap.find(id);
         if(mapIt != prevLeftPtsMap.end())
         {
-            cv::arrowedLine(imTrack, curLeftPts[i], mapIt->second, cv::Scalar(0, 255, 0), 1, 8, 0, 0.2);
+            cv::arrowedLine(imTrack, curLeftPts[i], mapIt->second, cv::Scalar(0, 255, 0), 1, 8, 0, 0.2);  // 连线
         }
     }
 

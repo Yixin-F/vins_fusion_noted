@@ -44,7 +44,7 @@ void img1_callback(const sensor_msgs::ImageConstPtr &img_msg)
     m_buf.unlock();
 }
 
-
+// ros图像消息转cv::Mat格式
 cv::Mat getImageFromMsg(const sensor_msgs::ImageConstPtr &img_msg)
 {
     cv_bridge::CvImageConstPtr ptr;
@@ -67,7 +67,7 @@ cv::Mat getImageFromMsg(const sensor_msgs::ImageConstPtr &img_msg)
     return img;
 }
 
-// ! extract images with same timestamp from two topics，软同步
+// ! extract images with same timestamp from two topics，左右目软同步后进行光流跟踪
 void sync_process()
 {
     while(1)
@@ -132,7 +132,7 @@ void sync_process()
     }
 }
 
-
+// imu处理
 void imu_callback(const sensor_msgs::ImuConstPtr &imu_msg)
 {
     double t = imu_msg->header.stamp.toSec();
@@ -148,7 +148,7 @@ void imu_callback(const sensor_msgs::ImuConstPtr &imu_msg)
     return;
 }
 
-
+// 接收特征消息并存储
 void feature_callback(const sensor_msgs::PointCloudConstPtr &feature_msg)
 {
     map<int, vector<pair<int, Eigen::Matrix<double, 7, 1>>>> featureFrame;
@@ -266,7 +266,8 @@ int main(int argc, char **argv)
     ros::Subscriber sub_imu_switch = n.subscribe("/vins_imu_switch", 100, imu_switch_callback);  // 订阅imu模式转换消息
     ros::Subscriber sub_cam_switch = n.subscribe("/vins_cam_switch", 100, cam_switch_callback);  // 订阅相机模式转换消息
 
-    std::thread sync_thread{sync_process};  // ! 时间戳的软同步线程
+    // ! 整个系统共有两个主线程，一是sync_process()，负责左右目软同步和光流跟踪，二是processMeasurements()，负责初始化、恢复位姿、滑窗优化、边缘化等
+    std::thread sync_thread{sync_process};  // ! 左右目软同步 + 光流跟踪
     ros::spin();
 
     return 0;

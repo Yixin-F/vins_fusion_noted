@@ -7,6 +7,9 @@
  * you may not use this file except in compliance with the License.
  *******************************************************/
 
+// ! 这个文件里除了const和一些结构体类型，所有的共用数据都是使用extern，是为了防止该文件.h重复包含时会报错多次定义，extern是引用声明，不会定义
+// ! #pragma once 只是“只编译一次”，防止文件重复包含而已
+
 #pragma once
 
 #include <ros/ros.h>

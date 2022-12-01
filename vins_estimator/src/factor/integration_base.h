@@ -15,6 +15,8 @@
 #include <ceres/ceres.h>
 using namespace Eigen;
 
+
+// ! 真正恢复且参与非线性优化的预积分位姿 并不是在IntegrationBase中进行的，IntegrationBase也在不停的预积分，但它的主要作用还是通过ESKF在传播非线性优化和边缘化中传播雅克比
 class IntegrationBase
 {
   public:
@@ -36,6 +38,7 @@ class IntegrationBase
         noise.block<3, 3>(15, 15) =  (GYR_W * GYR_W) * Eigen::Matrix3d::Identity();
     }
 
+    // 备份Imu数据，并进行一次中值积分
     void push_back(double dt, const Eigen::Vector3d &acc, const Eigen::Vector3d &gyr)
     {
         dt_buf.push_back(dt);
@@ -135,7 +138,8 @@ class IntegrationBase
         }
 
     }
-
+    
+    // 中值积分
     void propagate(double _dt, const Eigen::Vector3d &_acc_1, const Eigen::Vector3d &_gyr_1)
     {
         dt = _dt;

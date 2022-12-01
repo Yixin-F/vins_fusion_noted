@@ -44,7 +44,7 @@ int MAX_CNT;  // 光流跟踪最多特征点个数
 int MIN_DIST;  // 提取新的特征点时最小间隔
 double F_THRESHOLD;  // 基于基础矩阵F的ransac特征剔除阈值
 int SHOW_TRACK;  // 跟踪显示标志位
-int FLOW_BACK;  // 是否反向光流跟踪标志位
+int FLOW_BACK;  // 是否反向光流跟踪标志位，一是后一帧向前一帧的反追踪，二是右目向左目的反追踪
 
 // ros结点读取参数
 template <typename T>
