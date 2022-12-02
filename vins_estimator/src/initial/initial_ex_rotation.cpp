@@ -19,6 +19,7 @@ InitialEXRotation::InitialEXRotation(){
     ric = Matrix3d::Identity();
 }
 
+// 用一个滑窗内的所有帧来计算旋转外参，是通过纯图像和纯imu的关联超定方程求解的
 bool InitialEXRotation::CalibrationExRotation(vector<pair<Vector3d, Vector3d>> corres, Quaterniond delta_q_imu, Matrix3d &calib_ric_result)
 {
     frame_count++;
@@ -63,12 +64,12 @@ bool InitialEXRotation::CalibrationExRotation(vector<pair<Vector3d, Vector3d>> c
     JacobiSVD<MatrixXd> svd(A, ComputeFullU | ComputeFullV);
     Matrix<double, 4, 1> x = svd.matrixV().col(3);
     Quaterniond estimated_R(x);
-    ric = estimated_R.toRotationMatrix().inverse();
+    ric = estimated_R.toRotationMatrix().inverse();   // 旋转外参计算结果
     //cout << svd.singularValues().transpose() << endl;
     //cout << ric << endl;
     Vector3d ric_cov;
     ric_cov = svd.singularValues().tail<3>();
-    if (frame_count >= WINDOW_SIZE && ric_cov(1) > 0.25)
+    if (frame_count >= WINDOW_SIZE && ric_cov(1) > 0.25)   // ! 也就是说需要图像帧(包括kf和非kf)填充满滑窗后，才能完成旋转外参的计算
     {
         calib_ric_result = ric;
         return true;
@@ -77,6 +78,7 @@ bool InitialEXRotation::CalibrationExRotation(vector<pair<Vector3d, Vector3d>> c
         return false;
 }
 
+// 对极约束求解R
 Matrix3d InitialEXRotation::solveRelativeR(const vector<pair<Vector3d, Vector3d>> &corres)
 {
     if (corres.size() >= 9)
@@ -109,6 +111,7 @@ Matrix3d InitialEXRotation::solveRelativeR(const vector<pair<Vector3d, Vector3d>
     return Matrix3d::Identity();
 }
 
+// 根据深度值正负，检测四对对极约束的求解R和t
 double InitialEXRotation::testTriangulation(const vector<cv::Point2f> &l,
                                           const vector<cv::Point2f> &r,
                                           cv::Mat_<double> R, cv::Mat_<double> t)

@@ -10,11 +10,11 @@
 #include "parameters.h"
 
 double INIT_DEPTH;  // 地图点深度初始值
-double MIN_PARALLAX;  // 最小像素视差
+double MIN_PARALLAX;  // 最小像素视差  -> kf判断阈值
 double ACC_N, ACC_W;  // 加速度计噪声、加速度计bias噪声
 double GYR_N, GYR_W;  // 陀螺仪噪声、陀螺仪bias噪声
 
-std::vector<Eigen::Matrix3d> RIC;  // imu与相机的旋转外参
+std::vector<Eigen::Matrix3d> RIC;  // imu与相机的旋转外参，是待优化的
 std::vector<Eigen::Vector3d> TIC;  // imu与相机的平移外参
 
 Eigen::Vector3d G{0.0, 0.0, 9.8};  // 重力初始值

@@ -25,6 +25,7 @@ using namespace Eigen;
 #include "parameters.h"
 #include "../utility/tic_toc.h"
 
+// 某个特征在某图像帧中的属性
 class FeaturePerFrame
 {
   public:
@@ -58,11 +59,12 @@ class FeaturePerFrame
     bool is_stereo;
 };
 
+// 某个特征在所有被观测图像帧中的整体属性
 class FeaturePerId
 {
   public:
     const int feature_id;
-    int start_frame;
+    int start_frame;  // 第一次被观测到时的kf索引
     vector<FeaturePerFrame> feature_per_frame;
     int used_num;
     double estimated_depth;
@@ -102,7 +104,7 @@ class FeatureManager
     void removeBack();
     void removeFront(int frame_count);
     void removeOutlier(set<int> &outlierIndex);
-    list<FeaturePerId> feature;
+    list<FeaturePerId> feature;   // 管理所有的特征的整体属性
     int last_track_num;
     double last_average_parallax;
     int new_feature_num;

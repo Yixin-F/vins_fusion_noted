@@ -21,6 +21,7 @@
 using namespace Eigen;
 using namespace std;
 
+// 图像帧，包含特征集、位姿恢复、imu预积分头
 class ImageFrame
 {
     public:

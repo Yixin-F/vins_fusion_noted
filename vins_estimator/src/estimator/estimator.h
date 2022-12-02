@@ -162,7 +162,7 @@ class Estimator
     MarginalizationInfo *last_marginalization_info;
     vector<double *> last_marginalization_parameter_blocks;
 
-    map<double, ImageFrame> all_image_frame;
+    map<double, ImageFrame> all_image_frame;   // 存储所有的图像帧，包括kf和非kf
     IntegrationBase *tmp_pre_integration;   // 这个预积分头始终在imu预积分
 
     Eigen::Vector3d initP;

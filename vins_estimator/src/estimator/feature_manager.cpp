@@ -48,9 +48,10 @@ int FeatureManager::getFeatureCount()
     return cnt;
 }
 
-
+// 向特征管理器中添加特征，并通过像素视差检测是否是kf
 bool FeatureManager::addFeatureCheckParallax(int frame_count, const map<int, vector<pair<int, Eigen::Matrix<double, 7, 1>>>> &image, double td)
 {
+    // ! map<int, vector<pair<int, Eigen::Matrix<double, 7, 1>>>> image    ----> map<特征索引, vector<pair<左右目属性, 7维特征信息>>>
     ROS_DEBUG("input feature: %d", (int)image.size());
     ROS_DEBUG("num of feature: %d", getFeatureCount());
     double parallax_sum = 0;
@@ -61,8 +62,10 @@ bool FeatureManager::addFeatureCheckParallax(int frame_count, const map<int, vec
     long_track_num = 0;
     for (auto &id_pts : image)
     {
+        // Step 1: 判断左右目属性，且根据索引判断是否是新的特征而加入 全局特征存储器 feature
         FeaturePerFrame f_per_fra(id_pts.second[0].second, td); // 左目的结果
-        assert(id_pts.second[0].first == 0);
+        assert(id_pts.second[0].first == 0);  // 确定是左目属性0
+
         // 如果右目也有追踪结果
         if(id_pts.second.size() == 2)
         {
@@ -71,8 +74,8 @@ bool FeatureManager::addFeatureCheckParallax(int frame_count, const map<int, vec
             assert(id_pts.second[1].first == 1);
         }
 
-        int feature_id = id_pts.first;
         // 看看这个角点是不是新的角点
+        int feature_id = id_pts.first;
         auto it = find_if(feature.begin(), feature.end(), [feature_id](const FeaturePerId &it)
                           {
             return it.feature_id == feature_id;
@@ -93,13 +96,14 @@ bool FeatureManager::addFeatureCheckParallax(int frame_count, const map<int, vec
         }
     }
 
+    // Step 2: 视差检测关键帧
     //if (frame_count < 2 || last_track_num < 20)
     //if (frame_count < 2 || last_track_num < 20 || new_feature_num > 0.5 * last_track_num)
     if (frame_count < 2 || last_track_num < 20 || long_track_num < 40 || new_feature_num > 0.5 * last_track_num)
         return true;
 
     for (auto &it_per_id : feature)
-    {
+    {    // 至少存在两帧 && 至少被两帧同时观测到
         if (it_per_id.start_frame <= frame_count - 2 &&
             it_per_id.start_frame + int(it_per_id.feature_per_frame.size()) - 1 >= frame_count - 1)
         {
@@ -117,7 +121,7 @@ bool FeatureManager::addFeatureCheckParallax(int frame_count, const map<int, vec
         ROS_DEBUG("parallax_sum: %lf, parallax_num: %d", parallax_sum, parallax_num);
         ROS_DEBUG("current parallax: %lf", parallax_sum / parallax_num * FOCAL_LENGTH);
         last_average_parallax = parallax_sum / parallax_num * FOCAL_LENGTH;
-        return parallax_sum / parallax_num >= MIN_PARALLAX;
+        return parallax_sum / parallax_num >= MIN_PARALLAX;   // MIN_PARALLAX关键帧阈值
     }
 }
 
@@ -542,15 +546,16 @@ void FeatureManager::removeFront(int frame_count)
     }
 }
 
+// 计算被同时观测到的视差
 double FeatureManager::compensatedParallax2(const FeaturePerId &it_per_id, int frame_count)
 {
-    //check the second last frame is keyframe or not
-    //parallax betwwen seconde last frame and third last frame
+    // ! check the second last frame is keyframe or not
+    // parallax betwwen second last frame and third last frame
     const FeaturePerFrame &frame_i = it_per_id.feature_per_frame[frame_count - 2 - it_per_id.start_frame];
     const FeaturePerFrame &frame_j = it_per_id.feature_per_frame[frame_count - 1 - it_per_id.start_frame];
 
     double ans = 0;
-    Vector3d p_j = frame_j.point;
+    Vector3d p_j = frame_j.point;   // j的像素点
 
     double u_j = p_j(0);
     double v_j = p_j(1);
@@ -561,7 +566,7 @@ double FeatureManager::compensatedParallax2(const FeaturePerId &it_per_id, int f
     //int r_i = frame_count - 2;
     //int r_j = frame_count - 1;
     //p_i_comp = ric[camera_id_j].transpose() * Rs[r_j].transpose() * Rs[r_i] * ric[camera_id_i] * p_i;
-    p_i_comp = p_i;
+    p_i_comp = p_i;      // ? 这不相当于重复计算两次？p_i_comp的本义应该是变换到p_j所在的相机坐标系下再计算视差，其实这样是不对的，不应该变换！！
     double dep_i = p_i(2);
     double u_i = p_i(0) / dep_i;
     double v_i = p_i(1) / dep_i;

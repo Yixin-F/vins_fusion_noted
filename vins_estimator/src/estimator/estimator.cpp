@@ -311,14 +311,16 @@ void Estimator::processMeasurements()
                     std::this_thread::sleep_for(dura);
                 }
             }
+
+            // Step 2: 得到两帧之间的IMU数据
             mBuf.lock();
             if(USE_IMU)
-                // 得到两帧之间的IMU数据
                 getIMUInterval(prevTime, curTime, accVector, gyrVector);
 
             featureBuf.pop();
             mBuf.unlock();
 
+            // Step 3: 根据Imu粗略估计第一帧图像的位姿，同时processIMU()通过依次恢复滑窗内kf的位姿
             if(USE_IMU)
             {
                 if(!initFirstPoseFlag)
@@ -338,6 +340,8 @@ void Estimator::processMeasurements()
                     processIMU(accVector[i].first, dt, accVector[i].second, gyrVector[i].second);
                 }
             }
+
+            // Step 4: 处理图像帧
             mProcess.lock();
             processImage(feature.second, feature.first);
             prevTime = curTime;
@@ -398,7 +402,7 @@ void Estimator::initFirstPose(Eigen::Vector3d p, Eigen::Matrix3d r)
 // imu预积分
 void Estimator::processIMU(double t, double dt, const Vector3d &linear_acceleration, const Vector3d &angular_velocity)
 {
-    if (!first_imu)
+    if (!first_imu) 
     {
         first_imu = true;
         acc_0 = linear_acceleration;
@@ -413,7 +417,7 @@ void Estimator::processIMU(double t, double dt, const Vector3d &linear_accelerat
     {
         pre_integrations[frame_count]->push_back(dt, linear_acceleration, angular_velocity);   // ! 关于KF之间的imu预积分，一段一段的预积分
         //if(solver_flag != NON_LINEAR)
-            tmp_pre_integration->push_back(dt, linear_acceleration, angular_velocity);  // ! 整个系统运行时始终在预积分，全部的预积分
+            tmp_pre_integration->push_back(dt, linear_acceleration, angular_velocity);  // ! 从某一帧开始整个系统运行时始终在预积分，全部的预积分，包括kf和非kf，会在processImage()中重新定义
 
         dt_buf[frame_count].push_back(dt);   // 关于kf备份imu数据
         linear_acceleration_buf[frame_count].push_back(linear_acceleration);
@@ -432,12 +436,15 @@ void Estimator::processIMU(double t, double dt, const Vector3d &linear_accelerat
     gyr_0 = angular_velocity; 
 }
 
+// 图像帧处理
 void Estimator::processImage(const map<int, vector<pair<int, Eigen::Matrix<double, 7, 1>>>> &image, const double header)
 {
     ROS_DEBUG("new image coming ------------------------------------------");
     ROS_DEBUG("Adding feature points %lu", image.size());
+
+    // Step 1: 添加特征、确定是否是关键帧、确定边缘化方式
     if (f_manager.addFeatureCheckParallax(frame_count, image, td))
-    {
+    {   // ! 只有产生kf时，才边缘化最老帧，不然边缘化倒数第二帧，慢慢的滑窗里最后是被kf填充满的
         marginalization_flag = MARGIN_OLD;
         //printf("keyframe\n");
     }
@@ -453,10 +460,11 @@ void Estimator::processImage(const map<int, vector<pair<int, Eigen::Matrix<doubl
     Headers[frame_count] = header;
 
     ImageFrame imageframe(image, header);
-    imageframe.pre_integration = tmp_pre_integration;
-    all_image_frame.insert(make_pair(header, imageframe));
-    tmp_pre_integration = new IntegrationBase{acc_0, gyr_0, Bas[frame_count], Bgs[frame_count]};
+    imageframe.pre_integration = tmp_pre_integration;     // 全局积分头
+    all_image_frame.insert(make_pair(header, imageframe));   // 存进所有图像帧集合
+    tmp_pre_integration = new IntegrationBase{acc_0, gyr_0, Bas[frame_count], Bgs[frame_count]};   // ! 重新初始化全局积分头
 
+    // Step 2: 在线标定旋转外参
     if(ESTIMATE_EXTRINSIC == 2)
     {
         ROS_INFO("calibrating extrinsic param, rotation movement is needed");
@@ -468,13 +476,14 @@ void Estimator::processImage(const map<int, vector<pair<int, Eigen::Matrix<doubl
             {
                 ROS_WARN("initial extrinsic rotation calib success");
                 ROS_WARN_STREAM("initial extrinsic rotation: " << endl << calib_ric);
-                ric[0] = calib_ric;
+                ric[0] = calib_ric;    // 旋转外参
                 RIC[0] = calib_ric;
                 ESTIMATE_EXTRINSIC = 1;
             }
         }
     }
-
+    
+    // Step 3: 三种模式的初始化
     if (solver_flag == INITIAL)
     {
         // monocular + IMU initilization
@@ -486,7 +495,7 @@ void Estimator::processImage(const map<int, vector<pair<int, Eigen::Matrix<doubl
                 bool result = false;
                 if(ESTIMATE_EXTRINSIC != 2 && (header - initial_timestamp) > 0.1)
                 {
-                    result = initialStructure();
+                    result = initialStructure();   // 纯视觉sfm后与imu对齐
                     initial_timestamp = header;   
                 }
                 if(result)
@@ -611,10 +620,11 @@ void Estimator::processImage(const map<int, vector<pair<int, Eigen::Matrix<doubl
     }  
 }
 
+// 一个滑窗内纯视觉sfm + imu对齐
 bool Estimator::initialStructure()
 {
     TicToc t_sfm;
-    //check imu observibility
+    // Step 1: check imu observibility
     {
         map<double, ImageFrame>::iterator frame_it;
         Vector3d sum_g;
@@ -639,28 +649,32 @@ bool Estimator::initialStructure()
         if(var < 0.25)
         {
             ROS_INFO("IMU excitation not enouth!");
-            //return false;
+            //return false;    // ! 注释掉了，imu激励检测无效
         }
     }
-    // global sfm
+
+    // Step 2: 一个滑窗内的global sfm
     Quaterniond Q[frame_count + 1];
     Vector3d T[frame_count + 1];
     map<int, Vector3d> sfm_tracked_points;
     vector<SFMFeature> sfm_f;
+    // Step 2.1: 遍历所有可进行sfm的特征
     for (auto &it_per_id : f_manager.feature)
-    {
+    {  // 遍历每个特征
         int imu_j = it_per_id.start_frame - 1;
         SFMFeature tmp_feature;
         tmp_feature.state = false;
         tmp_feature.id = it_per_id.feature_id;
         for (auto &it_per_frame : it_per_id.feature_per_frame)
-        {
+        {  // 遍历每个特征在所有被观测帧中的信息
             imu_j++;
             Vector3d pts_j = it_per_frame.point;
-            tmp_feature.observation.push_back(make_pair(imu_j, Eigen::Vector2d{pts_j.x(), pts_j.y()}));
+            tmp_feature.observation.push_back(make_pair(imu_j, Eigen::Vector2d{pts_j.x(), pts_j.y()}));   // 得到了该特征在所有 imu_j 帧下的观测位置
         }
-        sfm_f.push_back(tmp_feature);
+        sfm_f.push_back(tmp_feature);   // 保存了所有可进行sfm的特征
     } 
+
+    // Step 2.2: 寻找枢纽帧索引，计算与滑窗最后一帧的R和t
     Matrix3d relative_R;
     Vector3d relative_T;
     int l;
